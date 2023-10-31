@@ -12,15 +12,18 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import InputLabel from "@mui/material/InputLabel";
 import FormControl from "@mui/material/FormControl";
+import Box from "@mui/material/Box";
 import { isMobile } from "react-device-detect";
 
 function App() {
   const [date, setDate] = useState(dayjs());
   const [time, setTime] = useState(dayjs());
-  const [location, setLocation] = useState("");
+  const [locationName, setLocationName] = useState("");
   const [locationList, setLocationList] = useState([]);
   const [weather, setWeather] = useState("");
   const [forecasts, setForecasts] = useState([]);
+  const [trafficImage, setTrafficImage] = useState("");
+  const [cameras, setCameras] = useState([]);
 
   useEffect(() => {
     const dateTime = dayjs()
@@ -38,22 +41,43 @@ function App() {
       const data = res.data;
       setLocationList(data.area_metadata);
       setForecasts(data.items[0].forecasts);
-      if (locationList.length) {
-        setLocation(locationList[0].name);
-      }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    axios({
+      url: "https://api.data.gov.sg/v1/transport/traffic-images",
+      params: { date_time: dateTime.format() },
+    }).then((res) => {
+      const data = res.data;
+      setCameras(data.items[0].cameras);
+    });
   }, [date, time]);
 
   useEffect(() => {
-    const forecast = forecasts.find((f) => f.area === location);
-    if (forecast) {
-      setWeather(forecast.forecast);
+    const location = locationList.find((l) => l.name === locationName);
+
+    if (!location) {
+      return;
     }
-  }, [location, forecasts]);
+
+    const forecast = forecasts.find((f) => f.area === locationName);
+    setWeather(forecast?.forecast ?? "");
+
+    let image = "";
+    let minDistance = Infinity;
+    for (const camera of cameras) {
+      const distance =
+        (camera.location.latitude - location.label_location?.latitude) ** 2 +
+        (camera.location.longitude - location.label_location?.longitude) ** 2;
+      if (distance < minDistance) {
+        image = camera.image ?? "";
+        minDistance = distance;
+      }
+    }
+    setTrafficImage(image);
+  }, [cameras, forecasts, locationList, locationName]);
 
   const handleChange = (event) => {
-    setLocation(event.target.value);
+    setLocationName(event.target.value);
   };
 
   return (
@@ -73,7 +97,7 @@ function App() {
             <InputLabel id="location-label">Location</InputLabel>
             <Select
               labelId="location-label"
-              value={location}
+              value={locationName}
               onChange={handleChange}
               fullWidth
             >
@@ -88,6 +112,10 @@ function App() {
 
         <Grid item xs={isMobile ? 8 : 4}>
           {weather}
+        </Grid>
+
+        <Grid item xs={12}>
+          <Box sx={{ maxWidth: 400 }} component="img" src={trafficImage} />
         </Grid>
       </Grid>
     </Container>
